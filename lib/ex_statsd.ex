@@ -25,11 +25,13 @@ defmodule ExStatsD do
   Start the server.
   """
   def start_link(options \\ []) do
+    # socket will be closed automatically, since its linked
+    {:ok, socket} = :gen_udp.open(0, [:binary])
     state = %{port:      Application.get_env(:ex_statsd, :port, @default_port),
               host:      Application.get_env(:ex_statsd, :host, @default_host) |> parse_host,
               namespace: Application.get_env(:ex_statsd, :namespace, @default_namespace),
               sink:      Application.get_env(:ex_statsd, :sink, @default_sink),
-              socket:    nil}
+              socket:    socket}
     GenServer.start_link(__MODULE__, state, [name: __MODULE__] ++ options)
   end
 
@@ -297,9 +299,7 @@ defmodule ExStatsD do
   def handle_cast({:transmit, message, options, sample_rate}, state) do
     tags = Keyword.get(options, :tags, [])
     pkt = message |> packet(state.namespace, tags, sample_rate)
-    {:ok, socket} = :gen_udp.open(0, [:binary])
-    :gen_udp.send(socket, state.host, state.port, pkt)
-    :gen_udp.close(socket)
+    :gen_udp.send(state.socket, state.host, state.port, pkt)
     {:noreply, state}
   end
 
